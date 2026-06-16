@@ -2,13 +2,6 @@ package error
 
 import "errors"
 
-const (
-	// Success digunakan sebagai status response ketika proses berhasil.
-	Success = "success"
-	// Error digunakan sebagai status response ketika proses gagal.
-	Error   = "error"
-)
-
 var (
 	// ErrInternalServerError digunakan untuk error umum yang tidak terduga dari server.
 	ErrInternalServerError = errors.New("internal server error")
