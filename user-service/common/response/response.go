@@ -11,11 +11,11 @@ import (
 // Response adalah format standar body JSON yang dikirim ke client.
 type Response struct {
 	// Status berisi status response, bisa "success" atau "error".
-	Status string `json:"status,omitempty"`
+	Status string `json:"status"`
 	// Message berisi pesan yang akan dikirim ke client, biasanya digunakan untuk error.
-	Message string `json:"message,omitempty"`
+	Message string `json:"message"`
 	// Data berisi data yang akan dikirim ke client, biasanya digunakan untuk response sukses.
-	Data interface{} `json:"data,omitempty"`
+	Data interface{} `json:"data"`
 	// Token berisi token autentikasi yang akan dikirim ke client.
 	Token string `json:"token,omitempty"`
 }
