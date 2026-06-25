@@ -11,7 +11,7 @@ import (
 
 // InitDatabase membuat koneksi database PostgreSQL menggunakan konfigurasi aplikasi.
 func InitDatabase() (*gorm.DB, error) {
-	config := config
+	config := Config
 	// Password di-escape agar karakter khusus tetap aman saat dimasukkan ke URI database.
 	endcodedPassword := url.QueryEscape(config.Database.Password)
 	// URI digunakan oleh driver PostgreSQL untuk membuka koneksi database.

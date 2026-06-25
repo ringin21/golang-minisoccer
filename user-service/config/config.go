@@ -7,60 +7,60 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// config menyimpan konfigurasi aplikasi yang sudah dibaca saat aplikasi berjalan.
-var config AppConfig
+// Config menyimpan konfigurasi aplikasi yang sudah dibaca saat aplikasi berjalan.
+var Config AppConfig
 
 // AppConfig adalah struktur utama konfigurasi aplikasi.
 type AppConfig struct {
 	// Port berisi port yang digunakan aplikasi untuk berjalan.
-	Port                   string   `json:"port"`
+	Port string `json:"port"`
 	// AppName berisi nama aplikasi.
-	AppName                string   `json:"appName"`
+	AppName string `json:"appName"`
 	// AppEnv berisi environment aplikasi, misalnya local, development, atau production.
-	AppEnv                 string   `json:"appEnv"`
+	AppEnv string `json:"appEnv"`
 	// SignatureKey berisi key untuk kebutuhan signature antar service.
-	SignatureKey           string   `json:"signatureKey"`
+	SignatureKey string `json:"signatureKey"`
 	// Database berisi konfigurasi koneksi database.
-	Database               Database `json:"database"`
+	Database Database `json:"database"`
 	// RateLimiterMaxRequests berisi jumlah maksimal request dalam periode tertentu.
-	RateLimiterMaxRequests float64  `json:"rateLimiterMaxRequests"`
+	RateLimiterMaxRequests float64 `json:"rateLimiterMaxRequests"`
 	// RateLimiterTimeSecond berisi durasi rate limiter dalam satuan detik.
-	RateLimiterTimeSecond  int      `json:"rateLimiterTimeSecond"`
+	RateLimiterTimeSecond int `json:"rateLimiterTimeSecond"`
 	// JwtSecretKey berisi secret key untuk membuat dan memvalidasi JWT.
-	JwtSecretKey           string   `json:"jwtSecretKey"`
+	JwtSecretKey string `json:"jwtSecretKey"`
 	// JwtExpirationTime berisi durasi masa berlaku JWT.
-	JwtExpirationTime      int      `json:"jwtExpirationTime"`
+	JwtExpirationTime int `json:"jwtExpirationTime"`
 }
 
 // Database adalah struktur konfigurasi koneksi database.
 type Database struct {
 	// Host berisi host database.
-	Host                  string `json:"host"`
+	Host string `json:"host"`
 	// Port berisi port database.
-	Port                  int    `json:"port"`
+	Port int `json:"port"`
 	// Name berisi nama database.
-	Name                  string `json:"name"`
+	Name string `json:"name"`
 	// Username berisi username database.
-	Username              string `json:"username"`
+	Username string `json:"username"`
 	// Password berisi password database.
-	Password              string `json:"password"`
+	Password string `json:"password"`
 	// MaxOpenConnections berisi jumlah maksimal koneksi database yang dibuka.
-	MaxOpenConnections    int    `json:"maxOpenConnections"`
+	MaxOpenConnections int `json:"maxOpenConnections"`
 	// MaxLifeTimeConnection berisi batas waktu hidup koneksi database.
-	MaxLifeTimeConnection int    `json:"maxLifeTimeConnection"`
+	MaxLifeTimeConnection int `json:"maxLifeTimeConnection"`
 	// MaxIdleConnections berisi jumlah maksimal koneksi idle.
-	MaxIdleConnections    int    `json:"maxIdleConnections"`
+	MaxIdleConnections int `json:"maxIdleConnections"`
 	// MaxIdleTime berisi batas waktu koneksi berada dalam kondisi idle.
-	MaxIdleTime           int    `json:"maxIdleTime"`
+	MaxIdleTime int `json:"maxIdleTime"`
 }
 
 // init membaca konfigurasi saat package config pertama kali digunakan.
 func init() {
-	err := util.BindFromJSON(&config, "config.json", ".")
+	err := util.BindFromJSON(&Config, "config.json", ".")
 	if err != nil {
 		// Jika config lokal tidak tersedia, aplikasi mencoba membaca config dari Consul.
 		logrus.Infof("failed to bind config: %v", err)
-		err = util.BindFromConsul(&config, os.Getenv("CONSUL_HTTP_URL"), os.Getenv("CONSUL_HTTP_KEY"))
+		err = util.BindFromConsul(&Config, os.Getenv("CONSUL_HTTP_URL"), os.Getenv("CONSUL_HTTP_KEY"))
 		if err != nil {
 			panic(err)
 		}
