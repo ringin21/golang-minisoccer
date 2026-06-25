@@ -4,11 +4,13 @@ import "errors"
 
 var (
 	// ErrUserNotFound digunakan ketika data user tidak ditemukan.
-	ErrUserNotFound         = errors.New("user not found")
+	ErrUserNotFound = errors.New("user not found")
 	// ErrPasswordIncorrect digunakan ketika password login tidak sesuai.
-	ErrPasswordIncorrect    = errors.New("password incorrect")
+	ErrPasswordIncorrect = errors.New("password incorrect")
 	// ErrUsernameExists digunakan ketika username sudah terdaftar.
-	ErrUsernameExists       = errors.New("username already exists")
+	ErrUsernameExists = errors.New("username already exists")
+	// ErrEmailExists digunakan ketika email sudah terdaftar.
+	ErrEmailExists = errors.New("email already exists")
 	// ErrPasswordDoesNotMatch digunakan ketika password dan konfirmasi password berbeda.
 	ErrPasswordDoesNotMatch = errors.New("password does not match")
 )
@@ -18,6 +20,7 @@ var UserErrors = []error{
 	ErrUserNotFound,
 	ErrPasswordIncorrect,
 	ErrUsernameExists,
+	ErrEmailExists,
 	ErrPasswordDoesNotMatch,
 }
 
