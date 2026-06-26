@@ -21,11 +21,11 @@ type Response struct {
 }
 
 // ParameterHTTPResp berisi semua parameter yang dibutuhkan untuk membuat HTTP response.
-type ParameterHTTPResp struct {
+type ParamHTTPResp struct {
 	// Code adalah HTTP status code yang akan dikirim ke client.
 	Code int
 	// Error berisi error yang menentukan response sukses atau gagal.
-	Error error
+	Err error
 	// Message memakai *string agar bisa bernilai nil ketika caller tidak mengirim custom message.
 	Message *string
 	// Gin memakai *gin.Context karena Gin mengelola request/response melalui context pointer.
@@ -37,14 +37,14 @@ type ParameterHTTPResp struct {
 }
 
 // HTTPResponse membuat response JSON standar berdasarkan parameter yang diterima.
-func HTTPResponse(param ParameterHTTPResp) {
+func HttpResponse(param ParamHTTPResp) {
 	token := ""
 	if param.Token != nil {
 		token = *param.Token
 	}
 
 	// Jika tidak ada error, kirim response sukses.
-	if param.Error == nil {
+	if param.Err == nil {
 		param.Gin.JSON(param.Code, Response{
 			Status:  constants.Success,
 			Message: http.StatusText(http.StatusOK),
@@ -58,10 +58,10 @@ func HTTPResponse(param ParameterHTTPResp) {
 	message := errConstant.ErrInternalServerError.Error()
 	if param.Message != nil {
 		message = *param.Message
-	} else if param.Error != nil {
+	} else if param.Err != nil {
 		// Jika error termasuk error aplikasi yang dikenali, gunakan pesan error tersebut.
-		if errConstant.ErrMapping(param.Error) {
-			message = param.Error.Error()
+		if errConstant.ErrMapping(param.Err) {
+			message = param.Err.Error()
 		}
 	}
 
