@@ -1,1 +1,224 @@
-// do something
+/*
+ * Pipeline CI/CD untuk user-service.
+ *
+ * Alur pipeline:
+ * 1. Membaca commit terakhir dan menangani penanda [skip ci].
+ * 2. Menentukan branch deployment dari GIT_BRANCH milik Jenkins.
+ * 3. Melakukan checkout source code dari GitHub.
+ * 4. Login ke Docker Hub, membangun image, lalu melakukan push.
+ * 5. Memperbarui versi image pada docker-compose.yaml dan mengirim perubahannya.
+ * 6. Mengambil source terbaru serta menjalankan container di server deployment.
+ *
+ * Prasyarat agent Jenkins:
+ * - Git, Docker, Docker Compose, SSH client, sed, dan shell tersedia di PATH.
+ * - Agent dapat mengakses GitHub, Docker Hub, dan server deployment.
+ * - Jenkins menyediakan GIT_BRANCH dengan nilai origin/main atau origin/development.
+ *
+ * Credential ID yang wajib tersedia di Jenkins:
+ * - docker-credential: username dan password Docker Hub.
+ * - github-credential: username/token yang memiliki izin push ke repository.
+ * - ssh-key: private key untuk mengakses server deployment.
+ * - host dan username: alamat serta user server deployment.
+ * - consul-http-url dan consul-http-token: konfigurasi akses Consul.
+ */
+pipeline {
+  // Jalankan pipeline pada agent Jenkins mana pun yang memenuhi prasyarat di atas.
+  agent any
+
+  // Variabel berikut tersedia untuk seluruh stage dalam pipeline.
+  environment {
+    // Nama repository image di Docker Hub.
+    IMAGE_NAME = 'user-service'
+
+    // Binding credential username/password otomatis menyediakan akhiran _USR dan _PSW.
+    // Contoh: DOCKER_CREDENTIALS_USR dan GITHUB_CREDENTIALS_PSW.
+    DOCKER_CREDENTIALS = credentials('docker-credential')
+    GITHUB_CREDENTIALS = credentials('github-credential')
+
+    // Credential dan identitas server untuk proses deployment melalui SSH.
+    SSH_KEY = credentials('ssh-key')
+    HOST = credentials('host')
+    USERNAME = credentials('username')
+
+    // Nilai konfigurasi Consul yang akan ditulis ke file .env pada server.
+    CONSUL_HTTP_URL = credentials('consul-http-url')
+    CONSUL_HTTP_TOKEN = credentials('consul-http-token')
+
+    // Interval polling perubahan konfigurasi Consul dalam satuan detik.
+    CONSUL_WATCH_INTERVAL_SECONDS = 60
+  }
+
+  stages {
+    // Cegah commit buatan pipeline memicu rangkaian build baru secara berulang.
+    stage('Check Commit Message') {
+      steps {
+        script {
+          // Ambil seluruh pesan dari commit HEAD dan hapus whitespace di tepinya.
+          def commitMessage = sh(
+            script: "git log -1 --pretty=%B",
+            returnStdout: true
+          ).trim()
+
+          echo "Commit Message: ${commitMessage}"
+
+          // Tandai build sebagai aborted apabila commit mengandung penanda [skip ci].
+          if (commitMessage.contains("[skip ci]")) {
+            echo "Skipping pipeline due to [skip ci] tag in commit message."
+            currentBuild.result = 'ABORTED'
+            currentBuild.delete()
+            return
+          }
+
+          echo "Pipeline will continue. No [skip ci] tag found in commit message."
+        }
+      }
+    }
+
+    // Petakan nama remote branch dari Jenkins ke nama branch Git yang akan diproses.
+    stage('Set Target Branch') {
+      steps {
+        script {
+          echo "GIT_BRANCH: ${env.GIT_BRANCH}"
+
+          // Pipeline hanya mendefinisikan target untuk branch main dan development.
+          if (env.GIT_BRANCH == 'origin/main') {
+            env.TARGET_BRANCH = 'main'
+          } else if (env.GIT_BRANCH == 'origin/development') {
+            env.TARGET_BRANCH = 'development'
+          }
+
+          echo "TARGET_BRANCH: ${env.TARGET_BRANCH}"
+        }
+      }
+    }
+
+    // Checkout branch target agar seluruh stage berikutnya memakai source yang tepat.
+    stage('Checkout Code') {
+      steps {
+        script {
+          // Repository utama user-service yang menjadi sumber build dan deployment.
+          def repoUrl = 'https://github.com/ringin21/golang-minisoccer.git'
+
+          // Gunakan GitSCM dan credential GitHub untuk mengambil branch target.
+          checkout([$class: 'GitSCM',
+            branches: [
+              [name: "*/${env.TARGET_BRANCH}"]
+            ],
+            userRemoteConfigs: [
+              [url: repoUrl, credentialsId: 'github-credential']
+            ]
+          ])
+
+          // Tampilkan isi workspace untuk membantu diagnosis hasil checkout.
+          sh 'ls -lah'
+        }
+      }
+    }
+
+    // Buat sesi autentikasi Docker Hub sebelum image dikirim ke registry.
+    stage('Login to Docker Hub') {
+      steps {
+        script {
+          // withCredentials membatasi paparan username/password pada blok ini.
+          withCredentials([usernamePassword(credentialsId: 'docker-credential', passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
+            sh """
+            # Kirim password melalui stdin agar tidak ditulis sebagai argumen command.
+            echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+            """
+          }
+        }
+      }
+    }
+
+    // Bangun image dari Dockerfile dan publikasikan dengan nomor build sebagai tag.
+    stage('Build and Push Docker Image') {
+      steps {
+        script {
+          // Nomor build menghasilkan tag image unik untuk setiap eksekusi Jenkins.
+          def runNumber = currentBuild.number
+
+          // Format image: <docker-user>/user-service:<jenkins-build-number>.
+          sh "docker build -t ${DOCKER_CREDENTIALS_USR}/${IMAGE_NAME}:${runNumber} ."
+          sh "docker push ${DOCKER_CREDENTIALS_USR}/${IMAGE_NAME}:${runNumber}"
+        }
+      }
+    }
+
+    // Arahkan konfigurasi Docker Compose ke image yang baru dipublikasikan.
+    stage('Update docker-compose.yaml') {
+      steps {
+        script {
+          def runNumber = currentBuild.number
+
+          // Ganti tag numerik image lama dengan nomor build Jenkins saat ini.
+          sh "sed -i 's|image: ${DOCKER_CREDENTIALS_USR}/${IMAGE_NAME}:[0-9]\\+|image: ${DOCKER_CREDENTIALS_USR}/${IMAGE_NAME}:${runNumber}|' docker-compose.yaml"
+        }
+      }
+    }
+
+    // Simpan versi image terbaru ke branch target agar konfigurasi deployment terlacak.
+    stage('Commit and Push Changes') {
+      steps {
+        script {
+          sh """
+          # Tetapkan identitas Git untuk commit otomatis yang dibuat Jenkins.
+          git config --global user.name 'Jenkins CI'
+          git config --global user.email 'jenkins@company.com'
+
+          # Gunakan credential Jenkins pada remote origin agar pipeline dapat push.
+          git remote set-url origin https://${GITHUB_CREDENTIALS_USR}:${GITHUB_CREDENTIALS_PSW}@github.com/ringin21/golang-minisoccer.git
+
+          # Commit hanya file Compose. Penanda [skip ci] mencegah pipeline berulang.
+          git add docker-compose.yaml
+          git commit -m 'Update image version to ${TARGET_BRANCH}-${currentBuild.number} [skip ci]' || echo 'No changes to commit'
+
+          # Rebase terhadap perubahan remote terbaru sebelum mengirim commit pipeline.
+          git pull origin ${TARGET_BRANCH} --rebase
+          git push origin HEAD:${TARGET_BRANCH}
+          """
+        }
+      }
+    }
+
+    // Deploy branch target ke host remote menggunakan Docker Compose.
+    stage('Deploy to Remote Server') {
+      steps {
+        script {
+          // Direktori permanen repository dan konfigurasi user-service di server.
+          def targetDir = "/home/ringinrp/mini-soccer-project/user-service"
+
+          // Susun satu perintah SSH yang melakukan sinkronisasi source dan redeploy.
+          def sshCommandToServer = """
+          # StrictHostKeyChecking dinonaktifkan agar koneksi non-interaktif tidak terhenti.
+          ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${USERNAME}@${HOST} '
+            # Update checkout yang sudah ada atau clone repository pada deploy pertama.
+            if [ -d "${targetDir}/.git" ]; then
+                echo "Directory exists. Pulling latest changes."
+                cd "${targetDir}"
+                git pull origin "${TARGET_BRANCH}"
+            else
+                echo "Directory does not exist. Cloning repository."
+                git clone -b "${TARGET_BRANCH}" git@github.com:ringin21/golang-minisoccer.git "${targetDir}"
+                cd "${targetDir}"
+            fi
+
+            # Bangun ulang .env dari template dan masukkan konfigurasi deployment.
+            cp .env.example .env
+            sed -i "s/^TIMEZONE=.*/TIMEZONE=Asia\\/Jakarta/" "${targetDir}/.env"
+            sed -i "s/^CONSUL_HTTP_URL=.*/CONSUL_HTTP_URL=${CONSUL_HTTP_URL}/" "${targetDir}/.env"
+            sed -i "s/^CONSUL_HTTP_PATH=.*/CONSUL_HTTP_PATH=backend\\/user-service/" "${targetDir}/.env"
+            sed -i "s/^CONSUL_HTTP_TOKEN=.*/CONSUL_HTTP_TOKEN=${CONSUL_HTTP_TOKEN}/" "${targetDir}/.env"
+            sed -i "s/^CONSUL_WATCH_INTERVAL_SECONDS=.*/CONSUL_WATCH_INTERVAL_SECONDS=${CONSUL_WATCH_INTERVAL_SECONDS}/" "${targetDir}/.env"
+
+            # Jalankan ulang service secara detached menggunakan konfigurasi terbaru.
+            sudo docker compose up -d --build --force-recreate
+          '
+          """
+
+          // Eksekusi perintah deployment yang telah disusun pada agent Jenkins.
+          sh sshCommandToServer
+        }
+      }
+    }
+  }
+}

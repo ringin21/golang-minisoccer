@@ -4,3 +4,4 @@ bin
 .env
 config.json
 tmp
+config.example.json
