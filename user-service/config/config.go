@@ -5,6 +5,7 @@ import (
 	"user-service/common/util"
 
 	"github.com/sirupsen/logrus"
+	_ "github.com/spf13/viper/remote"
 )
 
 // Config menyimpan konfigurasi aplikasi yang sudah dibaca saat aplikasi berjalan.

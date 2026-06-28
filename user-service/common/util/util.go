@@ -7,6 +7,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+	_ "github.com/spf13/viper/remote"
 )
 
 // BindFromJSON membaca file konfigurasi JSON lokal lalu mengisi data ke dest.

@@ -19,7 +19,7 @@ type UserResponse struct {
 	// Email berisi alamat email user.
 	Email string `json:"email"`
 	// Role berisi nama role user.
-	Role string `json:"role"`
+	Role string `json:"role,omitempty"`
 	// PhoneNumber berisi nomor telepon user.
 	PhoneNumber string `json:"phoneNumber"`
 }
