@@ -3,3 +3,4 @@ bin
 .gocache/
 .env
 config.json
+tmp
