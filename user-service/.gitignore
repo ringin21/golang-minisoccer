@@ -5,3 +5,4 @@ bin
 config.json
 tmp
 config.example.json
+README.md
